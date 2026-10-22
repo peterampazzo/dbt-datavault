@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: nation_h
+    columns:
+      - name: hk_nation_h
+        tests:
+          - unique
+          - not_null
+  - name: customer_h
+    columns:
+      - name: hk_customer_h
+        tests:
+          - unique
+          - not_null
+  - name: customer_nation_l
+    columns:
+      - name: hk_customer_nation_l
+        tests:
+          - unique
+          - not_null
+      - name: hk_customer_h
+        tests:
+          - not_null
+      - name: hk_nation_h
+        tests:
+          - not_null
+  - name: order_nh_l
+    columns:
+      - name: hk_order_nh_l
+        tests:
+          - unique
+          - not_null
+      - name: hk_order_h
+        tests:
+          - not_null

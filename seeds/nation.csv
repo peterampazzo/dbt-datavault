@@ -1,0 +1,11 @@
+n_nationkey,n_name,n_regionkey,n_comment,ldts,rsrc
+1,brazil,1,comment brazil,2024-01-01 00:00:00,seed/nation
+2,germany,3,comment germany,2024-01-01 00:00:00,seed/nation
+3,japan,2,comment japan,2024-01-01 00:00:00,seed/nation
+4,france,3,comment france,2024-01-01 00:00:00,seed/nation
+5,canada,1,comment canada,2024-01-01 00:00:00,seed/nation
+1,brazil,1,comment brazil,2024-01-02 00:00:00,seed/nation
+2,germany,3,comment germany v2,2024-01-02 00:00:00,seed/nation
+3,japan,2,comment japan,2024-01-02 00:00:00,seed/nation
+4,france,3,comment france,2024-01-02 00:00:00,seed/nation
+5,canada,1,comment canada,2024-01-02 00:00:00,seed/nation

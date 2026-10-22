@@ -1,0 +1,20 @@
+c_custkey,phone_type,phone_number,ldts,rsrc
+1,mobile,111-m,2024-01-01 00:00:00,seed/phone
+1,home,111-h,2024-01-01 00:00:00,seed/phone
+1,work,111-w,2024-01-01 00:00:00,seed/phone
+2,mobile,222-m,2024-01-01 00:00:00,seed/phone
+2,home,222-h,2024-01-01 00:00:00,seed/phone
+3,mobile,333-m,2024-01-01 00:00:00,seed/phone
+3,home,333-h,2024-01-01 00:00:00,seed/phone
+4,mobile,444-m,2024-01-01 00:00:00,seed/phone
+4,work,444-w,2024-01-01 00:00:00,seed/phone
+1,mobile,111-m,2024-01-02 00:00:00,seed/phone
+1,home,111-h,2024-01-02 00:00:00,seed/phone
+1,work,111-w,2024-01-02 00:00:00,seed/phone
+1,fax,111-f,2024-01-02 00:00:00,seed/phone
+2,mobile,222-m,2024-01-02 00:00:00,seed/phone
+2,home,222-h,2024-01-02 00:00:00,seed/phone
+3,mobile,333-m,2024-01-02 00:00:00,seed/phone
+3,home,333-h,2024-01-02 00:00:00,seed/phone
+4,mobile,444-m,2024-01-02 00:00:00,seed/phone
+4,work,444-w,2024-01-02 00:00:00,seed/phone

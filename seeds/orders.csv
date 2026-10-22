@@ -1,0 +1,14 @@
+o_orderkey,o_custkey,o_orderstatus,o_totalprice,o_orderdate,o_orderpriority,o_clerk,o_shippriority,o_comment,ldts,rsrc
+101,1,o,1100.50,2023-12-01,1,clerk1,0,ord c101,2024-01-01 00:00:00,seed/orders
+102,1,f,1200.50,2023-12-02,2,clerk2,1,ord c102,2024-01-01 00:00:00,seed/orders
+103,2,o,1300.50,2023-12-03,3,clerk3,2,ord c103,2024-01-01 00:00:00,seed/orders
+104,3,f,1400.50,2023-12-04,4,clerk1,3,ord c104,2024-01-01 00:00:00,seed/orders
+105,4,o,1500.50,2023-12-05,5,clerk2,4,ord c105,2024-01-01 00:00:00,seed/orders
+106,5,p,1600.50,2023-12-06,1,clerk3,5,ord c106,2024-01-01 00:00:00,seed/orders
+107,6,o,1700.50,2023-12-07,2,clerk1,6,ord c107,2024-01-01 00:00:00,seed/orders
+108,7,f,1800.50,2023-12-08,3,clerk2,7,ord c108,2024-01-01 00:00:00,seed/orders
+109,8,o,1900.50,2023-12-09,4,clerk3,0,ord c109,2024-01-01 00:00:00,seed/orders
+110,1,p,2000.50,2023-12-10,5,clerk1,1,ord c110,2024-01-01 00:00:00,seed/orders
+111,9,o,2100.50,2024-01-01,1,clerk2,2,ord c111,2024-01-02 00:00:00,seed/orders
+112,3,f,2200.50,2024-01-01,2,clerk3,3,ord c112,2024-01-02 00:00:00,seed/orders
+113,1,p,2300.50,2024-01-01,3,clerk1,4,ord c113,2024-01-02 00:00:00,seed/orders

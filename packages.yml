@@ -1,0 +1,7 @@
+packages:
+  # datavault4dbt with fabricspark support, from the fork branch under review.
+  # Switch to `- package: ScalefreeCOM/datavault4dbt` once the PR is merged.
+  - git: "https://github.com/peterampazzo/datavault4dbt.git"
+    revision: feature/fabricspark-support
+  # For local development against the sibling checkout, use instead:
+  # - local: ../datavault4dbt

@@ -1,0 +1,10 @@
+cur_code,cur_name,decimals,ldts,rsrc
+EUR,euro,2,2024-01-01 00:00:00,seed/currency
+USD,us dollar,2,2024-01-01 00:00:00,seed/currency
+JPY,japanese yen,0,2024-01-01 00:00:00,seed/currency
+GBP,british pound,2,2024-01-01 00:00:00,seed/currency
+EUR,euro v2,2,2024-01-02 00:00:00,seed/currency
+USD,us dollar,2,2024-01-02 00:00:00,seed/currency
+JPY,japanese yen,0,2024-01-02 00:00:00,seed/currency
+GBP,british pound,2,2024-01-02 00:00:00,seed/currency
+CHF,swiss franc,2,2024-01-02 00:00:00,seed/currency

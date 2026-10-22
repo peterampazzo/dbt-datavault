@@ -1,0 +1,17 @@
+c_custkey,c_name,c_address,c_nationkey,c_phone,c_acctbal,c_mktsegment,c_comment,ldts,rsrc
+1,alice,addr1,1,111,100.00,bldg,comment a1,2024-01-01 00:00:00,seed/customer
+2,bob,addr2,2,222,200.00,auto,comment b2,2024-01-01 00:00:00,seed/customer
+3,carol,addr3,3,333,300.00,mach,comment c3,2024-01-01 00:00:00,seed/customer
+4,dave,addr4,1,444,400.00,hh,comment d4,2024-01-01 00:00:00,seed/customer
+5,erin,addr5,4,555,500.00,bldg,comment e5,2024-01-01 00:00:00,seed/customer
+6,frank,addr6,5,666,600.00,auto,comment f6,2024-01-01 00:00:00,seed/customer
+7,grace,addr7,2,777,700.00,mach,comment g7,2024-01-01 00:00:00,seed/customer
+8,heidi,addr8,3,888,800.00,hh,comment h8,2024-01-01 00:00:00,seed/customer
+1,alice,addr1,1,111,100.00,bldg,comment a1,2024-01-02 00:00:00,seed/customer
+2,bob,addr2,2,222,200.00,auto,comment b2,2024-01-02 00:00:00,seed/customer
+3,carol,addr3,3,333,300.00,mach,comment c3,2024-01-02 00:00:00,seed/customer
+4,dave,addr4,1,444,400.00,hh,comment d4,2024-01-02 00:00:00,seed/customer
+5,erin,addr5,4,555,500.00,bldg,comment e5,2024-01-02 00:00:00,seed/customer
+6,frank,addr6b,5,666,600.00,auto,comment f6,2024-01-02 00:00:00,seed/customer
+7,grace,addr7,3,777,700.00,mach,comment g7,2024-01-02 00:00:00,seed/customer
+9,ivy,addr9,1,999,900.00,bldg,comment i9,2024-01-02 00:00:00,seed/customer

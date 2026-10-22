@@ -15,12 +15,17 @@ hashed_columns:
     hd_customer_n_s:
         is_hashdiff: true
         columns:
+            {%- if var('scn_sat_add_col', false) %}
+            - c_name
+            {%- endif %}
             - c_address
             - c_phone
             - c_acctbal
             - c_mktsegment
             - c_comment
+            {%- if not var('scn_sat_drop_col', false) %}
             - c_nationkey
+            {%- endif %}
 derived_columns:
     country_code:
         value: '!INTL'

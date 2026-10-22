@@ -11,6 +11,12 @@ source_models:
       bk_columns:
         - o_custkey
       rsrc_static: 'seed/orders'
+    {%- if var('scn_hub_third_source', false) %}
+    - name: stg_customer_phone
+      bk_columns:
+        - c_custkey
+      rsrc_static: 'seed/phone'
+    {%- endif %}
 {%- endset -%}
 
 {{ datavault4dbt.hub(yaml_metadata=yaml_metadata) }}

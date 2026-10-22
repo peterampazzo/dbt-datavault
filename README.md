@@ -294,6 +294,74 @@ Nothing landed in the wrong lakehouse; `dev` target still renders everything
 to `Lakehouse.dv_test` (verified via `dbt ls --target dev`: all nodes
 database=Lakehouse, schema=dv_test).
 
+## Change scenarios (runbook)
+
+What happens when the vault *changes* on Fabric: schema evolution, new
+sources, full refresh, the remaining rehash operations. Run on target `multi`
+on 2026-10-22 (dbt-fabricspark 1.13.7), one reused Livy session. All toggles
+are `var()`-guarded with defaults that leave the project behaviour unchanged
+(`dbt compile` output for `stg_customer`, `customer_n_s`, `customer_h` is
+byte-identical with vars unset).
+
+Vars: `scn_hub_third_source`, `scn_drop_source_col`, `scn_sat_add_col`,
+`scn_sat_drop_col`, `scn_osc` (`on_schema_change` for `customer_n_s`,
+default `ignore`), `scn_allow_delta_drop` (enables the experiment in
+`macros/scenario_overrides.sql`). Probes: `probe_describe`, `probe_tblprops`,
+`probe_sat_counts`. Always pass `load_until: "2024-01-02 00:00:00"` as well.
+
+Adapter facts behind the results: datavault4dbt sets no `incremental_strategy`
+or `on_schema_change`, so the adapter defaults apply — strategy `append`
+(`insert into <target> select <target columns> from <tmp view>`) and
+`on_schema_change: ignore`. Satellites filter the source on `ldts >` the
+target's high-water mark, so a changed hashdiff definition never re-inserts
+rows that are already loaded.
+
+| # | Scenario | Result | What happened / rule |
+| --- | --- | --- | --- |
+| S4 | Third source (`stg_customer_phone`) added to existing multi-source hub `customer_h` | PASS | 0 new rows on two consecutive runs (customers 1–4 already present); `unique` test passes. Compiled SQL shows a per-`rsrc_static` HWM CTE for `seed/phone`. Rule: `rsrc_static` must be the real `rsrc` value emitted by the stage. |
+| S6a | `rehash_single_link` on `customer_nation_l` | PASS | Column mapping set, add cols, MERGE, rename, drop. `delta.columnMapping.mode = name` afterwards. |
+| S6b | `rehash_single_ma_satellite` on `customer_phone_ma_s` | PASS | Same flow; tests pass. |
+| S6c | `rehash_single_nh_satellite` on `order_nh_s` | FAIL, then PASS | Cold run fails with `UNRESOLVED_COLUMN parent.hk_order_nh_l_new` and leaves a stuck `*_new` column. Required choreography (as documented by the package): rehash the parent nh-link **first with `overwrite_hash_values: false`**, then the satellite, then finalize the link with `overwrite: true`. The retry auto-dropped the stuck column. |
+| S3 | Upstream source drops a column (`c_comment`) | expected FAIL | `stg_customer` view creation fails with `UNRESOLVED_COLUMN c_comment`; 7 downstream nodes skipped, nothing loaded. Loud failure, no silent data loss. |
+| S1a | Add payload column `c_name` to hashdiff + payload, `on_schema_change: ignore` | PASS (silent) | Column is **not** added to the table; no error. No rows re-inserted (ldts HWM). Silent schema drift. |
+| S1b | Same with `on_schema_change: append_new_columns` | PASS | `alter table ... add columns c_name string` issued in the same run; column present, all NULL; no rows re-inserted. New values only arrive with the next `ldts`. |
+| S2a | Remove payload column `c_nationkey`, `ignore` | expected FAIL | `UNRESOLVED_COLUMN c_nationkey` at `insert into ... select` (target still has the column, tmp view does not). |
+| S2b | Same with `sync_all_columns` | expected FAIL | `Compilation Error: Delta tables does not support dropping columns from tables` — raised by the adapter macro `fabricspark__alter_relation_add_remove_columns`, unconditionally for Delta. |
+| S2b-x | Same with `scn_allow_delta_drop: true` (override) | PASS | `SET TBLPROPERTIES (columnMapping.mode=name)` + `ALTER TABLE ... DROP COLUMNS` succeed on Fabric; insert runs. Side effects: column mapping now on the table; the stock macro would then emit a bare `alter table <rel>` (empty add list) → `PARSE_SYNTAX_ERROR`; guarded in the override. |
+| S5 | `--full-refresh` on `customer_n_s+` and `customer_h+` (drop + CTAS path) | PASS | Cross-lakehouse drop/create fine, ghost rows regenerated, PIT post-hook MERGE ran (`customer_pit successfully cleaned!`). `delta.columnMapping.mode` and `maxColumnId` **disappear** after a full refresh (CTAS rebuild); `minReader/WriterVersion` stay elevated. |
+| Gate | Batch 2 with all vars unset | PASS 51/51 | `dbt ls` clean on `dev` and `multi`. |
+
+Pitfall met during S5: `stg_customer` is a **view**, so var-guarded metadata is
+baked in at view creation. A `--full-refresh --select customer_n_s+` after
+S2b rebuilt the satellite from the still-modified view (count 12 instead of
+13). Recovery order after any stage change: rebuild the stage view first, then
+full-refresh the satellite.
+
+Rules derived for operating datavault4dbt on Fabric:
+
+1. **Adding a satellite attribute**: the Data Vault answer is a new satellite
+   (or satellite version); if you extend an existing one, set
+   `on_schema_change: append_new_columns` on that model, accept NULL history,
+   and expect values only from the next `ldts` on. The default `ignore` drops
+   the column silently.
+2. **Removing a satellite attribute**: not possible through dbt on this
+   adapter (`sync_all_columns` is refused). Either keep the column, or rebuild
+   the satellite (`--full-refresh`, history replay), or run a controlled
+   `DROP COLUMN` with column mapping enabled — knowing that column mapping
+   has consequences for the SQL analytics endpoint. The adapter restriction is
+   a candidate issue for `microsoft/dbt-fabricspark`.
+3. **Upstream column loss** fails at the stage view — safe, but it blocks the
+   whole lineage below it until fixed.
+4. **nh-satellite rehash** needs the parent link rehashed first without
+   overwrite.
+5. **Full refresh resets table properties** set by rehash; a rehashed table
+   that is later full-refreshed is back to a plain Delta table.
+6. **New hub source** is a config change only; verify `rsrc_static` against
+   the stage's actual `rsrc`.
+
+Logs of the run are not committed; commands are reproducible from the table
+and the vars above.
+
 ## Versions
 
 - dbt-core: 1.12.5

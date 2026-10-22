@@ -122,3 +122,31 @@
     {% endfor %}
   {% endfor %}
 {% endmacro %}
+
+{% macro probe_tblprops(relation_name) %}
+  {% for row in run_query("SHOW TBLPROPERTIES " ~ ref(relation_name)).rows %}
+    {{ print("  " ~ row[0] ~ " = " ~ row[1]) }}
+  {% endfor %}
+{% endmacro %}
+
+{% macro probe_describe(relation_name) %}
+  {% for row in run_query("DESCRIBE " ~ ref(relation_name)).rows %}
+    {{ print("  " ~ row[0] ~ " " ~ row[1]) }}
+  {% endfor %}
+{% endmacro %}
+
+{% macro probe_sat_counts() %}
+  {% set cols = run_query("DESCRIBE " ~ ref('customer_n_s')).columns['col_name'].values() %}
+  {{ print("count(*) = " ~ run_query("SELECT COUNT(*) FROM " ~ ref('customer_n_s'))[0][0]) }}
+  {{ print("count(distinct hk_customer_h) = " ~ run_query("SELECT COUNT(DISTINCT hk_customer_h) FROM " ~ ref('customer_n_s'))[0][0]) }}
+  {% if 'c_name' in cols %}
+    {{ print("count(c_name) = " ~ run_query("SELECT COUNT(c_name) FROM " ~ ref('customer_n_s'))[0][0]) }}
+  {% else %}
+    {{ print("c_name: not present") }}
+  {% endif %}
+  {% if 'c_nationkey' in cols %}
+    {{ print("count(c_nationkey) = " ~ run_query("SELECT COUNT(c_nationkey) FROM " ~ ref('customer_n_s'))[0][0]) }}
+  {% else %}
+    {{ print("c_nationkey: not present") }}
+  {% endif %}
+{% endmacro %}

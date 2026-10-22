@@ -75,6 +75,15 @@ capacity admin to cancel jobs in the Monitoring hub. `high_concurrency: false`
 fell back to a plain Livy session but failed with the opaque "cannot create a
 livy session" while capacity was saturated.
 
+> **Update (dbt-fabricspark 1.13.9):** the above was observed on 1.13.7.
+> 1.13.8 fixed HC `reuse_session` accumulating sessions across invocations
+> (microsoft/dbt-fabricspark#303). Re-tested on 1.13.9 with the `dev` target
+> (`high_concurrency: true`, `reuse_session: true`): five consecutive
+> invocations (seed, build x2, two run-operations) shared **one** HC session
+> (`livy-session-id.txt.hc.json` sidecar), and the single 430 that occurred at
+> session creation was retried by the adapter instead of failing the run.
+> `high_concurrency: false` remains the simpler choice for CI.
+
 **Rehash implication:** `delta.columnMapping.mode` is NOT enabled by default
 (SET … = `<undefined>`), and RENAME/DROP COLUMN both require it — so the
 databricks rehash macros' `SET TBLPROPERTIES ('delta.columnMapping.mode'='name')`
@@ -365,5 +374,7 @@ and the vars above.
 ## Versions
 
 - dbt-core: 1.12.5
-- dbt-fabricspark: 1.13.7 (installed with the `cli` extra)
+- dbt-fabricspark: 1.13.9 (installed with the `cli` extra). The runs
+  documented above were made on 1.13.7; the full single- and multi-lakehouse
+  builds (51/51 both batches) were repeated on 1.13.9 with identical results.
 - Python: 3.12

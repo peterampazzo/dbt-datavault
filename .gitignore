@@ -2,7 +2,7 @@
 target/
 dbt_packages/
 logs/
-livy-session-id.txt
+livy-session-id.txt*
 .env
 .user.yml
 # follows the fork branch head; not pinned

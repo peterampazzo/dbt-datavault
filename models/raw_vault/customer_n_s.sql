@@ -16,6 +16,9 @@ src_payload:
     - c_nationkey
     {%- endif %}
 source_model: 'stg_customer'
+{%- if var('scn_disable_hwm', false) %}
+disable_hwm: true
+{%- endif %}
 {%- endset -%}
 
 {{ datavault4dbt.sat_v0(yaml_metadata=yaml_metadata) }}

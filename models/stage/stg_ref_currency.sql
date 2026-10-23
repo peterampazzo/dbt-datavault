@@ -3,7 +3,7 @@
 {%- set yaml_metadata -%}
 source_model: 'src_ref_currency'
 ldts: 'ldts'
-rsrc: 'rsrc'
+rsrc: '!seed.currency'
 hashed_columns:
     hd_currency_rs:
         is_hashdiff: true

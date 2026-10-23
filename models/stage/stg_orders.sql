@@ -4,6 +4,8 @@
 source_model: 'src_orders'
 ldts: 'ldts'
 rsrc: 'rsrc'
+missing_columns:
+    o_channel: 'STRING'
 hashed_columns:
     hk_order_h:
         - o_orderkey

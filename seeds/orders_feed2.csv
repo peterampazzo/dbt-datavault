@@ -1,0 +1,6 @@
+o_orderkey,o_custkey,o_orderstatus,o_totalprice,o_orderdate,o_orderpriority,o_clerk,o_shippriority,o_comment,ldts,rsrc
+201,2,o,500.00,2023-12-15,1,clerkA,0,feed2 201,2024-01-01 00:00:00,seed/orders2
+202,5,f,600.00,2023-12-16,2,clerkB,1,feed2 202,2024-01-01 00:00:00,seed/orders2
+203,7,o,700.00,2023-12-17,3,clerkA,2,feed2 203,2024-01-01 00:00:00,seed/orders2
+204,1,p,800.00,2024-01-01,1,clerkB,3,feed2 204,2024-01-02 00:00:00,seed/orders2
+205,3,o,900.00,2024-01-01,2,clerkA,4,feed2 205,2024-01-02 00:00:00,seed/orders2

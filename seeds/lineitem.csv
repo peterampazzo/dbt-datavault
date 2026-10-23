@@ -1,0 +1,13 @@
+l_orderkey,l_linenumber,l_partkey,l_quantity,l_extendedprice,l_seq,ldts,rsrc
+101,1,P1,10,100.00,1,2024-01-01 00:00:00,seed/lineitem
+101,2,P2,5,50.00,2,2024-01-01 00:00:00,seed/lineitem
+101,3,P3,1,10.00,3,2024-01-01 00:00:00,seed/lineitem
+102,1,P1,2,20.00,4,2024-01-01 00:00:00,seed/lineitem
+102,2,P4,7,70.00,5,2024-01-01 00:00:00,seed/lineitem
+103,1,P5,3,30.00,6,2024-01-01 00:00:00,seed/lineitem
+104,1,P2,4,40.00,7,2024-01-01 00:00:00,seed/lineitem
+104,2,P6,8,80.00,8,2024-01-01 00:00:00,seed/lineitem
+101,4,P7,1,10.00,9,2024-01-02 00:00:00,seed/lineitem
+102,1,P1,3,30.00,10,2024-01-02 00:00:00,seed/lineitem
+111,1,P2,2,20.00,11,2024-01-02 00:00:00,seed/lineitem
+111,2,P8,6,60.00,12,2024-01-02 00:00:00,seed/lineitem

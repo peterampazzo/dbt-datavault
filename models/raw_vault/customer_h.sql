@@ -17,6 +17,9 @@ source_models:
         - c_custkey
       rsrc_static: 'seed/phone'
     {%- endif %}
+{%- if var('scn_disable_hwm', false) %}
+disable_hwm: true
+{%- endif %}
 {%- endset -%}
 
 {{ datavault4dbt.hub(yaml_metadata=yaml_metadata) }}

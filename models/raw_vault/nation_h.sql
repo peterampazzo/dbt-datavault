@@ -4,6 +4,8 @@
 hashkey: 'hk_nation_h'
 business_keys:
     - n_nationkey
+additional_columns:
+    - n_regionkey
 source_models: stg_nation
 {%- endset -%}
 

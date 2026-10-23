@@ -150,3 +150,35 @@
     {{ print("c_nationkey: not present") }}
   {% endif %}
 {% endmacro %}
+
+{% macro probe_fm() %}
+  {% set qs = [
+    ("count currency_rs", "SELECT COUNT(*) FROM " ~ ref('currency_rs')),
+    ("count currency_rs_v1", "SELECT COUNT(*) FROM " ~ ref('currency_rs_v1')),
+    ("count currency_rt", "SELECT COUNT(*) FROM " ~ ref('currency_rt')),
+    ("count currency_rt_full", "SELECT COUNT(*) FROM " ~ ref('currency_rt_full')),
+    ("count currency_rt_snap", "SELECT COUNT(*) FROM " ~ ref('currency_rt_snap')),
+    ("count customer_pit", "SELECT COUNT(*) FROM " ~ ref('customer_pit')),
+    ("count customer_pit_any", "SELECT COUNT(*) FROM " ~ ref('customer_pit_any')),
+    ("count customer_pit_all", "SELECT COUNT(*) FROM " ~ ref('customer_pit_all')),
+    ("count customer_pit_ng", "SELECT COUNT(*) FROM " ~ ref('customer_pit_ng')),
+    ("control_snap_v1_bounded is_active", "SELECT COUNT(*) FROM " ~ ref('control_snap_v1_bounded') ~ " WHERE is_active"),
+  ] %}
+  {% for label, q in qs %}
+    {{ print(label ~ " = " ~ run_query(q)[0][0]) }}
+  {% endfor %}
+  {{ print("--- currency_rh rsrc") }}
+  {% for row in run_query("SELECT DISTINCT rsrc FROM " ~ ref('currency_rh') ~ " ORDER BY 1").rows %}
+    {{ print("  " ~ row[0]) }}
+  {% endfor %}
+  {{ print("--- customer_h hash lengths") }}
+  {% for row in run_query("SELECT DISTINCT length(hk_customer_h) FROM " ~ ref('customer_h')).rows %}
+    {{ print("  " ~ row[0]) }}
+  {% endfor %}
+{% endmacro %}
+
+{% macro probe_sql(q) %}
+  {% for row in run_query(q).rows %}
+    {{ print(row) }}
+  {% endfor %}
+{% endmacro %}

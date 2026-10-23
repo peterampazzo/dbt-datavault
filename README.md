@@ -8,6 +8,9 @@ The package under test is pulled from the fork branch
 `peterampazzo/datavault4dbt@feature/fabricspark-support` (see `packages.yml`);
 for local development against a sibling checkout, switch to `local: ../datavault4dbt`.
 
+For a walkthrough of the Data Vault model names, keys, history and YAML
+documentation, start with [Reading the Data Vault models](models/README.md).
+
 ## How to run
 
 ```bash
@@ -370,6 +373,48 @@ Rules derived for operating datavault4dbt on Fabric:
 
 Logs of the run are not committed; commands are reproducible from the table
 and the vars above.
+
+## Feature matrix
+
+Macro options exercised beyond the base entity set, run on 2026-10-22
+(dbt-fabricspark 1.13.9). The project now has 56 models / 45 singular tests;
+`dbt build --exclude resource_type:seed` is **95/95** on both batches on
+`multi`, and 95/95 on `dev` in a SHA2 schema and in an option-toggle schema.
+Two extra seeds: `lineitem` (12 rows, two batches, `l_seq` sequence column)
+and `orders_feed2` (5 rows, `rsrc = seed/orders2`).
+
+Env toggles (see `.env.example`): `DEV_SCHEMA` (dev target schema),
+`DV_HASH` (`MD5` default / `SHA2`), `DV_IBOBA`
+(`include_business_objects_before_appearance`), `DV_EAL`
+(`multi_source_models__execution_aware_loading`), `DV_COPY_RSRC_LDTS`
+(`copy_rsrc_ldts_input_columns`). Run vars: `scn_late_customer` (adds a
+customer row with `ldts = 2024-01-01` to `src_customer`), `scn_disable_hwm`
+(sets `disable_hwm: true` on `customer_h` / `customer_n_s`).
+
+| Option | Model(s) | Status | Notes |
+| --- | --- | --- | --- |
+| `link` multi-source (`rsrc_static` per source) | `customer_nation_l_ms` (stg_customer + `stg_orders_nation`, nation prejoined from `src_customer_latest`) | PASS | Row count equals single-source `customer_nation_l` (10 / 12). |
+| `nh_link` multi-source, `union_strategy: DISTINCT` | `order_nh_l_ms` (stg_orders + stg_orders_feed2) | PASS | 15 / 20 rows. |
+| Dependent child key in link | `stg_lineitem`, `order_line_l` (`foreign_hashkeys: [hk_order_h, l_linenumber]`) | PASS | 10 / 13; satellite on the link `order_line_s` 10 / 14. |
+| `additional_columns` on hub / link | `nation_h` (`n_regionkey`), `order_line_l` (`l_partkey`) | PASS | Column present, not part of the hash. |
+| `stage.missing_columns` | `stg_orders` (`o_channel STRING`) | PASS | NULL column, ghost records handle it. |
+| `stage.rsrc` literal (`'!seed.currency'`) | `stg_ref_currency` | PASS with caveat | The source must **not** already carry a column named like the rsrc alias, otherwise `AMBIGUOUS_REFERENCE`; `src_ref_currency` drops its `rsrc` column. Stored value `seed.currency`. |
+| `stage.include_source_columns: false` + derived column | `stg_customer_slim` | PASS with caveat | Needs `enable_ghost_records: false`: with ghost records on, the hashkey input column is missing from the ghost CTEs (`UNRESOLVED_COLUMN c_custkey`). Package bug, same code on all adapters. |
+| `stage.sequence` | — | **not testable** | With ghost records on, `edwSequence` is selected but not emitted by the ghost-record CTEs (`UNRESOLVED_COLUMN edwSequence`). Package bug, identical in the databricks/snowflake/postgres stage macros; removed from `stg_lineitem`. |
+| hashdiff `use_rtrim: true`, `use_trim: false` | `stg_nation` (`hd_nation_s`), `stg_lineitem` (`hd_order_line_s`) | PASS | `nation_n_s` 7 / 8. |
+| `enable_ghost_records: false` | `stg_customer_phone_ng`, `customer_phone_ma_s_ng(_v1)` | PASS | 9 / 13 (no ghost rows). |
+| `pit.mandatory_strategy: any / all`, `refer_to_ghost_records: false` | `customer_pit_any`, `customer_pit_all`, `customer_pit_ng` on `control_snap_v1_bounded` | PASS | 3 active snapshots: any = 24, all = 12 (only customers with phones), ghost-free = 30; no duplicate `hk_customer_d`. |
+| `control_snap_v0.end_date`, `control_snap_v1.log_logic` variant | `control_snap_v0_bounded` (2024-01-01..03-31), `control_snap_v1_bounded` | PASS | 91 snapshots, 3 active under the configured log logic (run date 2026-10-22). |
+| `ref_table.historized: full / snapshot` | `currency_rt_full`, `currency_rt_snap` | PASS | `full` = one row per key per satellite version boundary (12 rows), ghost keys not historized; `snapshot` = 6 keys x 3 active snapshots = 18. `latest` row count equals `currency_rh`. |
+| `sat_v1.include_payload: false`; `ma_sat_v1.add_is_current_flag` | `customer_n_s_v1_keys`, `customer_phone_ma_s_v1` | PASS | Keys + `IS_CURRENT` only; row count equals the v0 satellite. |
+| `eff_sat_v0.source_is_single_batch: true`, custom `is_active_alias` | `customer_nation_es_sb` | PASS | Same row count as `customer_nation_es` when loaded one batch per run. |
+| `hash: SHA2` | whole project, dev schema `dv_test_sha2` | PASS | 95/95 both batches; all `hk_customer_h` 64 chars incl. ghost keys; `rehash_single_hub` works. |
+| `include_business_objects_before_appearance: true`, `execution_aware_loading: false`, `copy_rsrc_ldts_input_columns: true` | whole project, dev schema `dv_test_opts` | PASS | 95/95 both batches; no column clashes from copying ldts/rsrc; PIT counts unchanged on this dataset (no objects appear before their first snapshot). |
+| `disable_hwm` + late-arriving row | `customer_h`, `customer_n_s` with `scn_late_customer` | PASS with caveat | With HWM on, a row older than the high-water mark is silently dropped (hub stays 11). With `disable_hwm: true` the hub loads it (12) and stays idempotent (`NOT IN` on hashkeys). The **satellite is not idempotent** under `disable_hwm`: re-running against a source that still contains already-loaded versions re-inserts earlier versions of every key with more than one version (`latest_entries_in_sat` only compares the latest hashdiff). Use `disable_hwm` on satellites only when the stage contains nothing already loaded (e.g. persistent staging with its own delta filter), or for one-shot backfills followed by dedup. Same macro logic on all adapters. |
+
+Pitfall (again): `src_customer` is a view, so `scn_late_customer` only takes
+effect if the view is rebuilt in the same run (`--select src_customer+` or
+include `src_customer stg_customer` in the selection).
 
 ## Versions
 

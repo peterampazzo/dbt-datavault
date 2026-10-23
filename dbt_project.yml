@@ -29,7 +29,7 @@ vars:
   datavault4dbt.is_current_col_alias: 'IS_CURRENT'
   datavault4dbt.deleted_flag_alias: 'deleted_flag'
   #Hash Configuration
-  datavault4dbt.hash: 'MD5'
+  datavault4dbt.hash: "{{ env_var('DV_HASH', 'MD5') }}"
   datavault4dbt.hash_datatype: 'STRING'
   datavault4dbt.hashkey_input_case_sensitive: FALSE
   datavault4dbt.hashdiff_input_case_sensitive: TRUE
@@ -53,12 +53,12 @@ vars:
   datavault4dbt.null_placeholder_string_replacement: 'dv4dbt-null-replacement'
 
   #Stage Configuration
-  datavault4dbt.copy_rsrc_ldts_input_columns: false
+  datavault4dbt.copy_rsrc_ldts_input_columns: "{{ env_var('DV_COPY_RSRC_LDTS', 'false') | lower == 'true' }}"
 
   #General Configuration
-  datavault4dbt.include_business_objects_before_appearance: false
+  datavault4dbt.include_business_objects_before_appearance: "{{ env_var('DV_IBOBA', 'false') | lower == 'true' }}"
   datavault4dbt.enable_static_analysis_overwrite: true
-  datavault4dbt.multi_source_models__execution_aware_loading: true
+  datavault4dbt.multi_source_models__execution_aware_loading: "{{ env_var('DV_EAL', 'true') | lower == 'true' }}"
   datavault4dbt.show_debug_logs: false
 
   # Default start of the week is Monday

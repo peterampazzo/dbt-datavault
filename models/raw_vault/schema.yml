@@ -2,35 +2,396 @@ version: 2
 
 models:
   - name: nation_h
+    description: >
+      Nation hub: one row per distinct n_nationkey received from stg_nation,
+      plus stage ghost records. Stores identity and first-load metadata.
+      n_regionkey is carried as an additional column; the hub does not track
+      changes to that value. See nation_n_s for descriptive history.
     columns:
       - name: hk_nation_h
+        description: Hash of the nation business key; joins the hub to nation satellites and customer_nation_l.
         tests:
           - unique
           - not_null
+      - name: n_nationkey
+        description: Nation identifier from the source system.
+      - name: n_regionkey
+        description: Region identifier retained when the nation is first inserted.
+      - name: ldts
+        description: Load timestamp of the first accepted occurrence of this nation.
+      - name: rsrc
+        description: Record source of the first accepted occurrence.
   - name: customer_h
+    description: >
+      Customer hub: one row per distinct customer business key across stg_customer
+      and stg_orders, plus ghost records. Orders map o_custkey into c_custkey,
+      so a customer can be known before their descriptive data arrives.
+      scn_hub_third_source optionally adds stg_customer_phone.
+      Customer attributes and their changes live in customer_n_s.
     columns:
       - name: hk_customer_h
+        description: Hash of the customer business key; shared join key across customer models.
         tests:
           - unique
           - not_null
+      - name: c_custkey
+        description: Customer business identifier, including order customer identifiers mapped from o_custkey.
+      - name: ldts
+        description: Load timestamp of the first accepted occurrence across the configured sources.
+      - name: rsrc
+        description: Record source of the first accepted occurrence.
   - name: customer_nation_l
+    description: >
+      Customer-to-nation link loaded from stg_customer. One row per distinct
+      customer/nation combination ever observed, plus ghost records.
+      A customer moving nation creates another relationship; it does not
+      overwrite the old one. See customer_nation_es for relationship activity.
     columns:
       - name: hk_customer_nation_l
+        description: Hash identifying the customer/nation combination.
         tests:
           - unique
           - not_null
       - name: hk_customer_h
+        description: Customer endpoint; joins to customer_h.hk_customer_h.
         tests:
           - not_null
       - name: hk_nation_h
+        description: Nation endpoint; joins to nation_h.hk_nation_h.
         tests:
           - not_null
   - name: order_nh_l
+    description: >
+      Non-historized order link from stg_orders. One row per order hashkey,
+      plus ghost records, carrying order date, total price and shipping priority.
+      This fixture treats orders as immutable events: later corrections to
+      an existing order are not stored as new versions by this model.
     columns:
       - name: hk_order_nh_l
+        description: Hash of o_orderkey identifying the order event.
         tests:
           - unique
           - not_null
       - name: hk_order_h
+        description: Hash of the order business key; this fixture has no separate order_h model.
         tests:
           - not_null
+      - name: o_orderdate
+        description: Source business date of the order, distinct from its load timestamp.
+      - name: o_totalprice
+        description: Total price carried on the order event.
+      - name: o_shippriority
+        description: Shipping priority carried on the order event.
+
+  - name: customer_n_s
+    description: >
+      Standard customer satellite (v0) from stg_customer. One row per customer
+      and load timestamp for each captured payload change, plus ghost records.
+      Stores address, phone, account balance, market segment, comment and nation
+      by default. The hashdiff detects changes. scn_sat_add_col adds c_name;
+      scn_sat_drop_col removes c_nationkey; scn_osc controls schema-change handling.
+      Use customer_n_s_v1 when querying validity intervals or current records.
+    columns:
+      - name: hk_customer_h
+        description: Parent customer; joins to customer_h.hk_customer_h.
+      - name: hd_customer_n_s
+        description: Hash used to detect changes in the staged customer payload.
+      - name: ldts
+        description: Load timestamp at which this version was captured; part of the satellite grain.
+      - name: rsrc
+        description: Source of this customer version.
+
+  - name: customer_n_s_v1
+    description: >
+      View over customer_n_s with the same customer/version grain. Adds a
+      calculated load end timestamp and current flag without updating the
+      underlying history. These intervals describe loading history, not
+      business-effective dates supplied by a source.
+    columns:
+      - name: hk_customer_h
+        description: Parent customer hashkey.
+      - name: ldts
+        description: Start of this version in loading history.
+      - name: ledts
+        description: Calculated load end timestamp; the last version uses the configured end of all times.
+      - name: IS_CURRENT
+        description: Flag identifying the latest loaded version for the customer.
+
+  - name: customer_n_s_v1_keys
+    description: >
+      Variant of customer_n_s_v1 with include_payload=false. Retains the
+      satellite keys and temporal metadata while omitting descriptive payload
+      columns. One row per customer/version; exercises the payload-free view.
+    columns:
+      - name: hk_customer_h
+        description: Parent customer hashkey.
+      - name: ldts
+        description: Load timestamp identifying the customer version.
+      - name: ledts
+        description: Calculated load end timestamp for the version.
+
+  - name: customer_nation_l_ms
+    description: >
+      Multi-source variant of customer_nation_l, combining stg_customer and
+      stg_orders_nation. One row per distinct customer/nation combination
+      across both feeds, plus ghost records. Exercises source-specific loading
+      using the seed/customer and seed/orders record-source patterns.
+    columns:
+      - name: hk_customer_nation_l
+        description: Relationship hashkey shared with the single-source link.
+      - name: hk_customer_h
+        description: Customer endpoint of the relationship.
+      - name: hk_nation_h
+        description: Nation endpoint of the relationship.
+
+  - name: customer_nation_es
+    description: >
+      Effectivity satellite tracking presence of customer/nation relationships
+      in stg_customer batches. One row per tracked relationship and load
+      timestamp when activity changes. source_is_single_batch=false processes
+      multiple load timestamps in the input. Absence is interpreted relative
+      to the supplied batches; this is a snapshot-presence test fixture.
+    columns:
+      - name: hk_customer_nation_l
+        description: Relationship whose activity is tracked; joins to customer_nation_l.
+      - name: ldts
+        description: Load timestamp of the activity change.
+      - name: is_active
+        description: Indicates whether the relationship is present in the corresponding source batch.
+
+  - name: customer_nation_es_sb
+    description: >
+      Effectivity satellite variant using source_is_single_batch=true and
+      the custom activity-column name is_current_rel. One row per relationship
+      activity change. Exercises the single-batch code path; its input is
+      expected to represent one batch, unlike customer_nation_es.
+    columns:
+      - name: hk_customer_nation_l
+        description: Tracked customer/nation relationship.
+      - name: ldts
+        description: Load timestamp of the activity change.
+      - name: is_current_rel
+        description: Custom name for the relationship activity indicator.
+
+  - name: customer_phone_ma_s
+    description: >
+      Multi-active customer phone satellite (v0) from stg_customer_phone.
+      A customer can have several phone types simultaneously. Within each
+      stored customer/load version, one row represents one phone_type.
+      phone_number is the descriptive payload; phone_type distinguishes
+      simultaneous entries. Includes stage ghost records.
+    columns:
+      - name: hk_customer_h
+        description: Parent customer hashkey.
+      - name: phone_type
+        description: Multi-active key distinguishing simultaneous phone entries for a customer.
+      - name: phone_number
+        description: Phone number associated with this phone type.
+      - name: ldts
+        description: Load timestamp of the captured multi-active version.
+      - name: hd_customer_phone_ma_s
+        description: Staged hashdiff used to detect changes to the customer's phone data.
+
+  - name: customer_phone_ma_s_v1
+    description: >
+      Temporal view over customer_phone_ma_s, adding ledts and IS_CURRENT.
+      Retains the customer/load timestamp/phone_type grain. Several phone
+      rows can be current for the same customer because this is multi-active data.
+    columns:
+      - name: phone_type
+        description: Phone entry within the customer's multi-active version.
+      - name: ledts
+        description: Calculated load end timestamp for the multi-active version.
+      - name: IS_CURRENT
+        description: Indicates membership in the customer's current multi-active version.
+
+  - name: customer_phone_ma_s_ng
+    description: >
+      Variant of customer_phone_ma_s fed by stg_customer_phone_ng, which
+      disables generated ghost records. Retains the customer/load timestamp/
+      phone_type grain. Used to exercise loading and PIT joins when synthetic
+      unknown and error phone rows are absent.
+    columns:
+      - name: hk_customer_h
+        description: Parent customer hashkey.
+      - name: phone_type
+        description: Multi-active key distinguishing phone entries.
+      - name: ldts
+        description: Load timestamp of the captured multi-active version.
+
+  - name: customer_phone_ma_s_ng_v1
+    description: >
+      Temporal view over customer_phone_ma_s_ng. Adds ledts and IS_CURRENT
+      at customer/load timestamp/phone_type grain without introducing stage
+      ghost records. Used by customer_pit_ng.
+    columns:
+      - name: ledts
+        description: Calculated load end timestamp for the multi-active version.
+      - name: IS_CURRENT
+        description: Indicates membership in the customer's current multi-active version.
+
+  - name: customer_rts
+    description: >
+      Record-tracking satellite recording where and when customer keys were
+      observed in stg_customer and stg_orders. One row per customer, load
+      timestamp and record source. Records presence even when descriptive
+      attributes have not changed; customer_n_s stores attribute changes.
+    columns:
+      - name: hk_customer_h
+        description: Customer observed in the source batch.
+      - name: ldts
+        description: Load timestamp of the observation.
+      - name: rsrc
+        description: Feed in which the customer was observed; part of the row grain.
+
+  - name: nation_n_s
+    description: >
+      Nation satellite (v0) from stg_nation. One row per nation/load timestamp
+      for a captured change in n_name or n_comment, plus ghost records.
+      n_regionkey is carried as an additional column outside the hashdiff;
+      changing only that column does not itself trigger a new version.
+    columns:
+      - name: hk_nation_h
+        description: Parent nation; joins to nation_h.hk_nation_h.
+      - name: hd_nation_s
+        description: Hashdiff of nation name and comment.
+      - name: n_regionkey
+        description: Additional region value carried on captured versions, outside change detection.
+      - name: ldts
+        description: Load timestamp identifying the nation version.
+
+  - name: order_line_l
+    description: >
+      Order-line link from stg_lineitem. One row per order/line-number
+      combination, plus ghost records. l_linenumber is a dependent child key:
+      it identifies a line within an order, not a globally unique entity.
+      l_partkey is carried as an additional column.
+    columns:
+      - name: hk_order_line_l
+        description: Hash of l_orderkey and l_linenumber.
+      - name: hk_order_h
+        description: Hash of the parent order key.
+      - name: l_linenumber
+        description: Line identifier within an order; stored directly rather than as a hub hashkey.
+      - name: l_partkey
+        description: Part identifier carried when the order-line relationship is inserted.
+
+  - name: order_line_s
+    description: >
+      Order-line satellite (v0) from stg_lineitem. One row per order-line
+      hashkey/load timestamp for each captured payload change, plus ghost
+      records. Tracks part, quantity and extended price. The stage hashdiff
+      uses use_trim=false to exercise that hashing option.
+    columns:
+      - name: hk_order_line_l
+        description: Parent order-line relationship; joins to order_line_l.
+      - name: hd_order_line_s
+        description: Hashdiff of part, quantity and extended price.
+      - name: ldts
+        description: Load timestamp identifying the order-line version.
+
+  - name: order_nh_l_ms
+    description: >
+      Multi-source variant of order_nh_l combining stg_orders and
+      stg_orders_feed2 with union_strategy=DISTINCT. One row per accepted
+      order hashkey, plus ghost records. Exercises overlapping event feeds;
+      order payload is treated as immutable rather than historized.
+    columns:
+      - name: hk_order_nh_l
+        description: Order event hashkey shared across both feeds.
+      - name: rsrc
+        description: Source recorded for the accepted order event.
+
+  - name: order_nh_s
+    description: >
+      Non-historized satellite attached to order_nh_l, loaded from stg_orders.
+      One row per accepted order event hashkey, plus ghost records. Carries
+      status, priority, clerk and comment without hashdiff-based versioning.
+      This fixture assumes those event attributes do not need change history.
+    columns:
+      - name: hk_order_nh_l
+        description: Parent order event; joins to order_nh_l.hk_order_nh_l.
+      - name: ldts
+        description: Load timestamp of the accepted event payload.
+
+  - name: currency_rh
+    description: >
+      Reference hub of currency codes from stg_ref_currency. One row per
+      cur_code, plus ghost records. Uses the reference key directly rather
+      than a hashed hub key. Descriptive history lives in currency_rs.
+    columns:
+      - name: cur_code
+        description: Currency reference key shared by the currency models.
+
+  - name: currency_rs
+    description: >
+      Reference satellite (v0) from stg_ref_currency. One row per currency
+      code/load timestamp for each captured name or decimals change, plus
+      ghost records. The parent key is cur_code rather than a hashkey.
+    columns:
+      - name: cur_code
+        description: Parent currency code; joins to currency_rh.
+      - name: hd_currency_rs
+        description: Hashdiff detecting currency name and decimals changes.
+      - name: cur_name
+        description: Currency display name in this loaded version.
+      - name: decimals
+        description: Number of decimal places defined for the currency.
+      - name: ldts
+        description: Load timestamp identifying the currency version.
+
+  - name: currency_rs_v1
+    description: >
+      Temporal view over currency_rs with one row per currency/load version.
+      Adds the calculated ledts and IS_CURRENT flag for use by reference tables.
+    columns:
+      - name: cur_code
+        description: Currency reference key.
+      - name: ledts
+        description: Calculated load end timestamp of this currency version.
+      - name: IS_CURRENT
+        description: Flag identifying the latest loaded currency version.
+
+  - name: currency_rt
+    description: >
+      Latest-value currency lookup joining currency_rh with currency_rs_v1.
+      One row per currency reference key, including applicable ghost keys,
+      exposing cur_name and decimals from the latest satellite version.
+      Configured with historized=latest.
+    columns:
+      - name: cur_code
+        description: Currency lookup key.
+      - name: cur_name
+        description: Latest loaded currency name.
+      - name: decimals
+        description: Latest loaded currency decimal-place setting.
+
+  - name: currency_rt_full
+    description: >
+      Full-history currency reference table joining currency_rh and
+      currency_rs_v1 with historized=full. One row per eligible currency code
+      and distinct load timestamp drawn from the reference satellite.
+      Selects the attributes valid at each timestamp, so unchanged currencies
+      can repeat when another currency changes. Exposes historical cur_name
+      and decimals rather than only the latest values.
+    columns:
+      - name: cur_code
+        description: Currency reference key; repeats across historical load timestamps.
+      - name: ldts
+        description: Reference-history timestamp at which the currency attributes are selected.
+      - name: cur_name
+        description: Currency name in this historical version.
+      - name: decimals
+        description: Decimal-place setting in this historical version.
+
+  - name: currency_rt_snap
+    description: >
+      Currency reference table with historized=snapshot. Uses active dates
+      from control_snap_v1_bounded to expose currency attributes at each
+      selected snapshot. The intended grain is currency code/snapshot timestamp;
+      active dates follow the control model's retention rules.
+    columns:
+      - name: cur_code
+        description: Currency reference key; repeats across snapshots.
+      - name: sdts
+        description: Snapshot timestamp at which currency attributes are selected.

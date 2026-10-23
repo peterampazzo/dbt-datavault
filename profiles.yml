@@ -10,7 +10,7 @@ dv4dbt_fabricspark:
       lakehouseid: "{{ env_var('FABRIC_LAKEHOUSE_ID') }}"
       lakehouse: "{{ env_var('FABRIC_LAKEHOUSE_NAME') }}"
       # Schema-enabled lakehouse: schema must differ from lakehouse name
-      schema: dv_test
+      schema: "{{ env_var('DEV_SCHEMA', 'dv_test') }}"
       threads: 1
       reuse_session: true
       high_concurrency: true

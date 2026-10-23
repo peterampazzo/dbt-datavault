@@ -1,0 +1,112 @@
+version: 2
+
+models:
+  - name: control_snap_v0
+    description: >
+      Incremental snapshot calendar with one row per daily midnight timestamp,
+      starting on 2024-01-01. No explicit end_date is supplied, so the macro
+      uses its default end boundary. Supplies candidate dates to control_snap_v1.
+    columns:
+      - name: sdts
+        description: Candidate snapshot timestamp.
+
+  - name: control_snap_v0_bounded
+    description: >
+      Snapshot calendar variant with explicit start_date=2024-01-01 and
+      end_date=2024-03-31, at midnight daily. One row per generated snapshot
+      timestamp. Gives the feature tests a fixed calendar range.
+    columns:
+      - name: sdts
+        description: Candidate snapshot timestamp in the configured calendar range.
+
+  - name: control_snap_v1
+    description: >
+      View over control_snap_v0 that marks which snapshot dates to retain.
+      One row per candidate date. Uses daily snapshots for 3 months, weekly
+      for 1 year, monthly for 5 years and yearly forever. Activity depends
+      on the current date, so a fixed historical date need not remain active.
+      customer_pit builds and retains rows using is_active.
+    columns:
+      - name: sdts
+        description: Candidate snapshot timestamp from control_snap_v0.
+      - name: is_active
+        description: Whether this date is selected by the snapshot retention rules.
+
+  - name: control_snap_v1_bounded
+    description: >
+      Retention view over control_snap_v0_bounded, with one row per candidate
+      date. Uses daily snapshots for 1 month, weekly for 1 year, monthly for
+      5 years and yearly forever. The calendar range is fixed, but is_active
+      is evaluated relative to the current date. Drives the PIT variants and
+      currency_rt_snap.
+    columns:
+      - name: sdts
+        description: Candidate timestamp from the bounded calendar.
+      - name: is_active
+        description: Whether this historical snapshot date is currently selected for retention.
+
+  - name: customer_pit
+    description: >
+      Customer point-in-time (PIT) lookup. One row per customer hashkey and
+      selected snapshot timestamp, pointing to matching customer_n_s and
+      customer_phone_ma_s records. Stores join pointers rather than customer
+      attributes; a phone pointer can resolve to multiple phone types.
+      Uses the v0 satellites and control_snap_v1, with ghost-record fallback.
+      The post-hook removes PIT rows whose snapshots are no longer active.
+    columns:
+      - name: hk_customer_d
+        description: Generated dimension key identifying the customer/snapshot combination.
+      - name: hk_customer_h
+        description: Customer being reconstructed; joins to customer_h.
+      - name: sdts
+        description: Snapshot timestamp for the selected satellite pointers.
+
+  - name: customer_pit_all
+    description: >
+      Customer PIT variant using customer_n_s_v1, customer_phone_ma_s_v1
+      and the bounded snapshot calendar. mandatory_strategy=all retains a
+      customer/snapshot row only when both satellites have coverage at that
+      timestamp. This can exclude customers who have descriptive data but
+      no phone data. One row per retained customer/snapshot combination.
+      The post-hook removes snapshots no longer marked active.
+    columns:
+      - name: hk_customer_d
+        description: Generated key identifying the customer/snapshot combination.
+      - name: hk_customer_h
+        description: Customer with coverage in both configured satellites at this snapshot.
+      - name: sdts
+        description: Active bounded-calendar timestamp used for satellite coverage and joins.
+
+  - name: customer_pit_any
+    description: >
+      Customer PIT variant using the same satellites and calendar as
+      customer_pit_all. mandatory_strategy=any requires coverage in at least
+      one of customer_n_s_v1 or customer_phone_ma_s_v1 at the snapshot.
+      A customer can therefore qualify with descriptive data alone.
+      One row per retained customer/snapshot combination; missing satellite
+      matches use the default ghost-record fallback. The post-hook removes
+      snapshots no longer marked active.
+    columns:
+      - name: hk_customer_d
+        description: Generated key identifying the customer/snapshot combination.
+      - name: hk_customer_h
+        description: Customer with coverage in at least one configured satellite at this snapshot.
+      - name: sdts
+        description: Active bounded-calendar timestamp used for satellite coverage and joins.
+
+  - name: customer_pit_ng
+    description: >
+      Customer PIT using customer_n_s_v1 and customer_phone_ma_s_ng_v1
+      with the bounded calendar. refer_to_ghost_records=false leaves missing
+      satellite pointers null instead of substituting unknown-record pointers.
+      The phone satellite is sourced from a stage without ghost records.
+      One row per retained customer/snapshot combination; no mandatory
+      satellite coverage strategy is set. The post-hook removes snapshots
+      no longer marked active.
+    columns:
+      - name: hk_customer_d
+        description: Generated key identifying the customer/snapshot combination.
+      - name: hk_customer_h
+        description: Customer being reconstructed at the snapshot.
+      - name: sdts
+        description: Active bounded-calendar snapshot timestamp.

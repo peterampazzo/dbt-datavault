@@ -13,6 +13,47 @@ documentation, start with [Reading the Data Vault models](models/README.md).
 
 ## How to run
 
+### 0. Provision a Fabric sandbox (once, ~30 min)
+
+**With a work/school account:** go to https://app.fabric.microsoft.com, profile icon
+-> *Free trial* -> pick a region -> *Activate*. If the option is missing, your tenant
+admin has disabled self-service trials.
+
+**With a personal email (Gmail, Outlook.com, ...):** Fabric does not accept consumer
+accounts directly. Follow Microsoft's guide
+https://learn.microsoft.com/fabric/fundamentals/free-trial-account-personal-email:
+
+1. Create a free Azure account with the personal email (phone + card for identity
+   check, nothing is charged). This creates a Microsoft Entra tenant you own.
+2. Azure portal -> *Microsoft Entra ID* -> *Users* -> *New user* -> *Create new user*.
+   This gives you a work-style identity `<name>@<tenant>.onmicrosoft.com`. Note its
+   UPN and password; no roles needed.
+3. Sign in to https://app.fabric.microsoft.com with that UPN (not the personal email),
+   set up Authenticator when asked, then profile icon -> *Free trial* -> region ->
+   *Activate*. The trial is a 60-day capacity; data persists after it ends but
+   nothing runs until a capacity is reassigned.
+4. Note the **tenant id**: Fabric portal -> *?* -> *About Fabric* -> the `ctid=` value
+   in the Tenant URL (or Azure portal -> Entra ID -> Overview). You need it for
+   `az login --tenant <id> --allow-no-subscriptions`, because the CLI otherwise
+   signs in to the account's home tenant and cannot see the Fabric workspace.
+
+Then, for both cases:
+
+5. Create a workspace and assign it to the trial capacity (Workspace settings ->
+   *License info* -> *Trial*).
+6. Create the Lakehouses: `Lakehouse` (`dev` target) and `LH_Bronze`, `LH_Silver`,
+   `LH_Gold` (`multi` target). In the create dialog tick **Lakehouse schemas** — it
+   cannot be enabled afterwards, and this project is validated only on
+   schema-enabled Lakehouses.
+7. Copy ids into `.env`: workspace id and lakehouse id are the two GUIDs in the
+   browser URL (`/groups/<workspace-id>/lakehouses/<lakehouse-id>`); names are the
+   display names, case-sensitive.
+8. Install the Azure CLI (`brew install azure-cli`) and continue with step 1 below.
+   `authentication: CLI` needs no app registration. For CI use a service principal
+   with Contributor on the workspace (not exercised in this project).
+
+### 1–4. Configure and connect
+
 ```bash
 # 1. Fill in your Fabric ids
 cp .env.example .env   # then edit .env

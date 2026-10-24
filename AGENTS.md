@@ -80,7 +80,7 @@ changed later. Secrets live only in `.env` (gitignored).
 ```bash
 cp .env.example .env              # fill in workspace / lakehouse ids and names
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt   # dbt-core 1.12.5, dbt-fabricspark[cli] 1.13.9
+pip install -r requirements.txt   # dbt-core 1.12.5, dbt-fabricspark[cli] 1.13.10
 set -a; source .env; set +a
 export DBT_PROFILES_DIR=.
 az login --tenant <tenant-id> --allow-no-subscriptions
@@ -104,9 +104,9 @@ dbt build --target multi                --exclude resource_type:seed --vars '{lo
 
 Option toggles are env vars (see `.env.example`): `DV_HASH=SHA2`,
 `DV_IBOBA`, `DV_EAL`, `DV_COPY_RSRC_LDTS`. Change-scenario switches are dbt
-vars (`scn_*`) read by `src_customer`, `stg_customer`, `customer_h`,
-`customer_n_s` and `macros/scenario_overrides.sql`; the README runbook lists
-the exact commands and observed outcomes.
+vars (`scn_*`) read by `src_customer`, `stg_customer`, `customer_h` and
+`customer_n_s`; the README runbook lists the exact commands and observed
+outcomes.
 
 Fabric capability probes (QUALIFY, column mapping, DDL, timestamps) are
 run-operations in `macros/probes.sql` (`probe_schema_setup`, `probe_version`,
@@ -146,9 +146,12 @@ README lists the expected outcome of each.
   the fork handles both. `RENAME/DROP COLUMN` need Delta column mapping, which
   the rehash operations enable per table (may affect SQL endpoint / Direct Lake
   readability of that table).
-- `dbt-fabricspark` refuses `on_schema_change: sync_all_columns` column drops
-  and emits a bare `alter table` when the add list is empty
-  (`macros/scenario_overrides.sql` demonstrates the Fabric-side fix).
+- `on_schema_change: sync_all_columns` column drops were refused before
+  dbt-fabricspark 1.13.10 (fixed via microsoft/dbt-fabricspark#317): drops now
+  require the model opt-in `enable_column_mapping_on_drop: true`, which sets
+  `delta.columnMapping.mode='name'` — a **one-way Delta protocol upgrade**
+  (reader >= 2 / writer >= 5) that can affect SQL-endpoint readability. A
+  full-refresh CTAS resets it.
 - datavault4dbt `stage` with `sequence:` or `include_source_columns: false`
   plus ghost records fails on every adapter (ghost CTEs omit the columns);
   worked around in `stg_lineitem` and `stg_customer_slim`.
@@ -164,6 +167,5 @@ README lists the expected outcome of each.
 | `models/*/schema.yml` | column documentation and model descriptions |
 | `tests/` | singular tests: `count_*`, `no_dup_*`, `eq_*`, `hash_length_*`, PIT relationships |
 | `macros/probes.sql` | Fabric capability probes |
-| `macros/scenario_overrides.sql` | opt-in adapter override for the Delta DROP COLUMN scenario |
 | `packages.yml` | datavault4dbt source (fork branch now; switch to the released package after merge) |
 | `dbt_project.yml` | datavault4dbt global vars with `fabricspark` keys; per-target database/schema routing |

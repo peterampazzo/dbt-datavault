@@ -358,9 +358,11 @@ byte-identical with vars unset).
 
 Vars: `scn_hub_third_source`, `scn_drop_source_col`, `scn_sat_add_col`,
 `scn_sat_drop_col`, `scn_osc` (`on_schema_change` for `customer_n_s`,
-default `ignore`), `scn_allow_delta_drop` (enables the experiment in
-`macros/scenario_overrides.sql`). Probes: `probe_describe`, `probe_tblprops`,
-`probe_sat_counts`. Always pass `load_until: "2024-01-02 00:00:00"` as well.
+default `ignore`), `scn_cm_on_drop` (`enable_column_mapping_on_drop` on
+`customer_n_s`, default `false` — lets the adapter enable Delta column
+mapping so `DROP COLUMNS` is allowed). Probes: `probe_describe`,
+`probe_tblprops`, `probe_sat_counts`. Always pass
+`load_until: "2024-01-02 00:00:00"` as well.
 
 Adapter facts behind the results: datavault4dbt sets no `incremental_strategy`
 or `on_schema_change`, so the adapter defaults apply — strategy `append`
@@ -379,8 +381,9 @@ rows that are already loaded.
 | S1a | Add payload column `c_name` to hashdiff + payload, `on_schema_change: ignore` | PASS (silent) | Column is **not** added to the table; no error. No rows re-inserted (ldts HWM). Silent schema drift. |
 | S1b | Same with `on_schema_change: append_new_columns` | PASS | `alter table ... add columns c_name string` issued in the same run; column present, all NULL; no rows re-inserted. New values only arrive with the next `ldts`. |
 | S2a | Remove payload column `c_nationkey`, `ignore` | expected FAIL | `UNRESOLVED_COLUMN c_nationkey` at `insert into ... select` (target still has the column, tmp view does not). |
-| S2b | Same with `sync_all_columns` | expected FAIL | `Compilation Error: Delta tables does not support dropping columns from tables` — raised by the adapter macro `fabricspark__alter_relation_add_remove_columns`, unconditionally for Delta. |
-| S2b-x | Same with `scn_allow_delta_drop: true` (override) | PASS | `SET TBLPROPERTIES (columnMapping.mode=name)` + `ALTER TABLE ... DROP COLUMNS` succeed on Fabric; insert runs. Side effects: column mapping now on the table; the stock macro would then emit a bare `alter table <rel>` (empty add list) → `PARSE_SYNTAX_ERROR`; guarded in the override. |
+| S2b | Same with `sync_all_columns`, no opt-in | expected FAIL | `Compilation Error: Dropping columns from Delta table ... requires Delta column mapping. Set enable_column_mapping_on_drop=true on the model ...` — raised by `fabricspark__ensure_delta_column_mapping` (dbt-fabricspark 1.13.10, microsoft/dbt-fabricspark#317). On 1.13.9 the same run failed unconditionally with `Delta tables does not support dropping columns from tables`. |
+| S2b-x | Same with `scn_cm_on_drop: true` | PASS | `ALTER TABLE ... SET TBLPROPERTIES ('delta.columnMapping.mode' = 'name')` + `ALTER TABLE ... DROP COLUMNS (c_nationkey)` then insert; 13 rows. Post-state: `columnMapping.mode=name`, `maxColumnId=10`, reader=3/writer=7 (the adapter only raises versions to its 2/5 minimums, never downgrades — Fabric defaults are already higher). On 1.13.9 this needed a project-level macro override (since removed); the stock macro then also emitted a bare `alter table` (empty add list) — fixed in 1.13.10. |
+| S2b-y | Re-run S2b without the opt-in after mapping is on | PASS | Once `delta.columnMapping.mode` is `name`/`id`, the adapter skips `SET TBLPROPERTIES` and drops directly — `ALTER TABLE ... DROP COLUMNS` only. Column mapping is a **one-way protocol upgrade**; a full-refresh CTAS resets it. |
 | S5 | `--full-refresh` on `customer_n_s+` and `customer_h+` (drop + CTAS path) | PASS | Cross-lakehouse drop/create fine, ghost rows regenerated, PIT post-hook MERGE ran (`customer_pit successfully cleaned!`). `delta.columnMapping.mode` and `maxColumnId` **disappear** after a full refresh (CTAS rebuild); `minReader/WriterVersion` stay elevated. |
 | Gate | Batch 2 with all vars unset | PASS 51/51 | `dbt ls` clean on `dev` and `multi`. |
 
@@ -397,12 +400,15 @@ Rules derived for operating datavault4dbt on Fabric:
    `on_schema_change: append_new_columns` on that model, accept NULL history,
    and expect values only from the next `ldts` on. The default `ignore` drops
    the column silently.
-2. **Removing a satellite attribute**: not possible through dbt on this
-   adapter (`sync_all_columns` is refused). Either keep the column, or rebuild
-   the satellite (`--full-refresh`, history replay), or run a controlled
-   `DROP COLUMN` with column mapping enabled — knowing that column mapping
-   has consequences for the SQL analytics endpoint. The adapter restriction is
-   a candidate issue for `microsoft/dbt-fabricspark`.
+2. **Removing a satellite attribute**: since dbt-fabricspark 1.13.10,
+   `on_schema_change: sync_all_columns` can drop columns when the model opts
+   in with `enable_column_mapping_on_drop: true` (`scn_cm_on_drop` here) —
+   the adapter sets `delta.columnMapping.mode='name'` itself. Column mapping
+   is a **one-way Delta protocol upgrade** (reader >= 2 / writer >= 5) and may
+   affect the SQL analytics endpoint / Direct Lake readability of that table.
+   Without the opt-in the run fails with a compile error naming the setting.
+   Alternatives that avoid mapping: keep the column, or rebuild the satellite
+   (`--full-refresh`, history replay).
 3. **Upstream column loss** fails at the stage view — safe, but it blocks the
    whole lineage below it until fixed.
 4. **nh-satellite rehash** needs the parent link rehashed first without
@@ -417,10 +423,13 @@ and the vars above.
 
 ## Feature matrix
 
-Macro options exercised beyond the base entity set, run on 2026-10-22
-(dbt-fabricspark 1.13.9). The project now has 56 models / 45 singular tests;
-`dbt build --exclude resource_type:seed` is **95/95** on both batches on
-`multi`, and 95/95 on `dev` in a SHA2 schema and in an option-toggle schema.
+Macro options exercised beyond the base entity set, first run on 2026-10-22
+(dbt-fabricspark 1.13.9); the full `multi` regression gate was re-run on
+2026-10-24 on dbt-fabricspark **1.13.10** — **95/95 PASS on both batches**,
+one reused Livy session, no HTTP 430. The project now has 56 models / 45
+singular tests; `dbt build --exclude resource_type:seed` is **95/95** on both
+batches on `multi`, and 95/95 on `dev` in a SHA2 schema and in an
+option-toggle schema.
 Two extra seeds: `lineitem` (12 rows, two batches, `l_seq` sequence column)
 and `orders_feed2` (5 rows, `rsrc = seed/orders2`).
 
@@ -460,7 +469,8 @@ include `src_customer stg_customer` in the selection).
 ## Versions
 
 - dbt-core: 1.12.5
-- dbt-fabricspark: 1.13.9 (installed with the `cli` extra). The runs
+- dbt-fabricspark: 1.13.10 (installed with the `cli` extra). The runs
   documented above were made on 1.13.7; the full single- and multi-lakehouse
-  builds (51/51 both batches) were repeated on 1.13.9 with identical results.
+  builds (51/51 both batches) were repeated on 1.13.9, and the 95-node
+  `multi` gate plus the S2b change scenario on 1.13.10 — identical results.
 - Python: 3.12

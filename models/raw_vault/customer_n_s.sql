@@ -1,4 +1,4 @@
-{{ config(materialized='incremental', on_schema_change=var('scn_osc', 'ignore')) }}
+{{ config(materialized='incremental', on_schema_change=var('scn_osc', 'ignore'), enable_column_mapping_on_drop=var('scn_cm_on_drop', false)) }}
 
 {%- set yaml_metadata -%}
 parent_hashkey: 'hk_customer_h'
